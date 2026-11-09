@@ -1,0 +1,45 @@
+{
+  "catalog": {
+    "dataset": "lcbo",
+    "version": "2026-11-08",
+    "count": 1618,
+    "complete": 1051,
+    "withStyle": 1549,
+    "withFlavor": 1288,
+    "withPhoto": 1465,
+    "sources": [
+      {
+        "label": "LCBO 官网",
+        "url": "https://www.lcbo.com/en/collections/beer",
+        "license": "个人非商业参考"
+      }
+    ]
+  },
+  "retrievedOn": "2026-11-08",
+  "index": {
+    "Products|Beer": {
+      "reported": 1915,
+      "received": 1915
+    },
+    "Products|Non-Alcoholic|De-Alcoholized Beer": {
+      "reported": 0,
+      "received": 0
+    }
+  },
+  "listedSkus": 1915,
+  "acceptedSkus": 1864,
+  "excludedSkus": 51,
+  "mergedPackagingSkus": 246,
+  "fields": {
+    "brand": 1502,
+    "style": 1549,
+    "retailStyle": 1434,
+    "taste": 1288,
+    "photo": 1465,
+    "abv": 1598,
+    "origin": 1617,
+    "imageCandidate": 1618,
+    "complete": 1051
+  },
+  "unavailablePages": []
+}

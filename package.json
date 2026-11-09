@@ -1,0 +1,55 @@
+{
+  "name": "beer-ranking",
+  "productName": "BeerRanking",
+  "version": "0.2.0",
+  "description": "LCBO 啤酒图鉴与个人品饮记录",
+  "author": "BeerRanking",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/main.cjs",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "tsc --noEmit && node scripts/build.mjs && vite build",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "test": "node --test tests/*.test.ts",
+    "dist": "npm run build && electron-builder --win nsis --x64",
+    "test:desktop": "playwright test"
+  },
+  "dependencies": {
+    "lucide-react": "^0.552.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  },
+  "build": {
+    "appId": "local.beerranking.desktop",
+    "directories": { "output": "release" },
+    "files": ["dist/**", "package.json"],
+    "extraResources": [
+      { "from": "catalog/beer-catalog.sqlite", "to": "beer-catalog.sqlite" },
+      { "from": "catalog/ATTRIBUTION.txt", "to": "CATALOG-ATTRIBUTION.txt" }
+    ],
+    "win": {
+      "icon": "assets/beer.ico",
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

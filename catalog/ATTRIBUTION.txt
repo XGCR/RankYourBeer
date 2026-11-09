@@ -1,0 +1,10 @@
+BeerRanking · LCBO personal offline catalogue
+
+Catalogue metadata, product descriptions and product photographs come from the
+public LCBO website. Each beer links to its official LCBO product page and
+records the relevant LCBO product numbers. Photographs have been resized for
+offline display. Source names, images and trademarks retain their original rights.
+
+This copy is prepared for personal, non-commercial reference.
+https://www.lcbo.com/en/collections/beer
+https://www.lcbo.com/content/lcbo/en/corporate-pages/terms-and-conditions.html
