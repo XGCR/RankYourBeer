@@ -1,10 +1,12 @@
-"""Build BeerRanking's personal offline snapshot from LCBO's public website."""
+"""Build BeerRanking's personal catalogue from LCBO's public website."""
 
 import argparse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from decimal import Decimal, InvalidOperation
 import gzip
+from html import unescape
 import hashlib
 import io
 import json
@@ -29,11 +31,17 @@ COLLECTION = SITE + "/en/collections/beer"
 TERMS = SITE + "/content/lcbo/en/corporate-pages/terms-and-conditions.html"
 SOURCE = {"label": "LCBO 官网", "url": COLLECTION, "license": "个人非商业参考"}
 IMAGE_HOSTS = {"aem.lcbo.com", "www.lcbo.com"}
-ROOT_CATEGORIES = ("Products|Beer", "Products|Non-Alcoholic|De-Alcoholized Beer")
+ROOT_CATEGORIES = {
+    "Products|Beer": "beer", "Products|Cider": "cider", "Products|Wine": "wine",
+    "Products|Spirits": "spirits", "Products|Ready-to-Drink": "rtd", "Products|Non-Alcoholic": "non-alcoholic",
+}
+BEER_WITHOUT_ALCOHOL = "Products|Non-Alcoholic|De-Alcoholized Beer"
 VISIBLE = "@source=='ProductsEN' AND @enabled=='true' AND @ec_visibility==(2,4)"
-PAGE_SIZE = 48
-FIELDS = ["permanentid", "ec_name", "ec_category", "ec_brand", "upc", "ec_upc", "lcbo_upc",
-          "lcbo_alcohol_percent", "lcbo_region_name", "country_of_manufacture"]
+PAGE_SIZE = 200
+RESULT_LIMIT = 4500
+FIELDS = ["permanentid", "ec_name", "ec_category", "ec_category_filter", "ec_brand", "upc_number",
+          "lcbo_alcohol_percent", "lcbo_region_name", "country_of_manufacture", "ec_price", "ec_thumbnails",
+          "lcbo_unit_volume", "lcbo_selling_package_name", "lcbo_tastingnotes", "lcbo_varietal_name"]
 SESSION = threading.local()
 
 STYLE_HINTS = (
@@ -102,39 +110,57 @@ def listing():
     org, browser_token = configuration.groups()
     endpoint = f"https://{org}.org.coveo.com/rest/search/v2"
     headers = {"Authorization": f"Bearer {browser_token}", "Origin": SITE}
+    def search(expression, offset, size):
+        payload = {"q": "", "aq": VISIBLE + " AND " + expression, "searchHub": "Web_Listing_EN",
+                   "tab": "clp-collections-beer", "numberOfResults": size, "firstResult": offset,
+                   "locale": "en-CA", "fieldsToInclude": FIELDS}
+        response = http().post(endpoint, headers=headers, json=payload, timeout=(10, 30), allow_redirects=False)
+        response.raise_for_status()
+        time.sleep(0.16)
+        return response.json()
+
+    def pages(expression, first=None):
+        data = first or search(expression, 0, PAGE_SIZE)
+        expected = int(data["totalCountFiltered"])
+        rows = list(data["results"])
+        if expected > RESULT_LIMIT:
+            raise ValueError(f"LCBO partition has too many results: {expected}, {expression}")
+        while len(rows) < expected:
+            more = search(expression, len(rows), PAGE_SIZE)["results"]
+            if not more:
+                raise ValueError(f"LCBO listing stopped at {len(rows)} of {expected}: {expression}")
+            rows.extend(more)
+        return rows
+
     products, counts = {}, {}
     for category in ROOT_CATEGORIES:
-        offset, expected = 0, None
-        while expected is None or offset < expected:
-            payload = {"q": "", "aq": VISIBLE + " AND @ec_category==" + repr(category),
-                       "searchHub": "Web_Listing_EN", "tab": "clp-collections-beer",
-                       "numberOfResults": PAGE_SIZE, "firstResult": offset, "locale": "en-CA",
-                       "fieldsToInclude": FIELDS}
-            response = http().post(endpoint, headers=headers, json=payload, timeout=(10, 25), allow_redirects=False)
-            if response.status_code != 200:
-                raise RuntimeError(f"LCBO search returned HTTP {response.status_code} at offset {offset}.")
-            data = response.json()
-            rows = data.get("results", [])
-            if expected is None:
-                expected = int(data["totalCountFiltered"])
-                counts[category] = {"reported": expected, "received": 0}
-            if not rows:
-                break
-            for row in rows:
-                raw = row.get("raw", {})
-                url = urlsplit(row.get("clickUri", ""))
-                match = re.fullmatch(r"/en/[^/]+-(\d+)", url.path)
-                if (url.scheme == "https" and url.netloc == "www.lcbo.com" and match
-                        and str(raw.get("permanentid")) == match[1]):
-                    products[match[1]] = {"sku": match[1], "url": SITE + url.path,
-                                          **{key: raw[key] for key in FIELDS if key in raw}}
-            counts[category]["received"] += len(rows)
-            offset += len(rows)
-            time.sleep(0.22)
+        expression = "@ec_category==" + repr(category)
+        first = search(expression, 0, PAGE_SIZE)
+        expected = int(first["totalCountFiltered"])
+        if expected > RESULT_LIMIT:
+            bounds = (10, 15, 20, 25, 35, 60, 100, 200)
+            ranges = [f"@ec_price<{bounds[0]}",
+                      *(f"@ec_price>={low} AND @ec_price<{high}" for low, high in zip(bounds, bounds[1:])),
+                      f"@ec_price>={bounds[-1]}", "NOT @ec_price>=0"]
+            rows = [row for span in ranges for row in pages(expression + " AND (" + span + ")")]
+        else:
+            rows = pages(expression, first)
+        seen = {str(row.get("raw", {}).get("permanentid")) for row in rows}
+        if len(seen) != expected:
+            raise ValueError(f"LCBO listing mismatch for {category}: {len(seen)} unique of {expected} expected.")
+        for row in rows:
+            raw = row.get("raw", {})
+            url = urlsplit(row.get("clickUri", ""))
+            match = re.fullmatch(r"/en/[^/]+-(\d+)", url.path)
+            if (url.scheme == "https" and url.netloc == "www.lcbo.com" and match
+                    and str(raw.get("permanentid")) == match[1]):
+                products[match[1]] = {"sku": match[1], "url": SITE + url.path,
+                                      **{key: raw[key] for key in FIELDS if key in raw}}
+        counts[category] = {"reported": expected, "received": len(seen)}
         print(f"{category}: {counts[category]}", flush=True)
     if not products:
         raise ValueError("LCBO search returned no public beer products.")
-    return {"categories": counts, "products": sorted(products.values(), key=lambda product: int(product["sku"]))}
+    return {"schema": 2, "categories": counts, "products": sorted(products.values(), key=lambda product: int(product["sku"]))}
 
 
 def image_for(page, sku):
@@ -156,7 +182,7 @@ def style_for(name, paths, profile):
         if re.search(pattern, identity(name)):
             return label
     broad = [path.split("|")[-1] for path in paths if path in (
-        "Products|Beer|Ale", "Products|Beer|Lager", ROOT_CATEGORIES[1],
+        "Products|Beer|Ale", "Products|Beer|Lager", BEER_WITHOUT_ALCOHOL,
     )]
     return broad[-1] if broad else profile
 
@@ -174,7 +200,86 @@ def node_text(node):
     return clean(" ".join(node.itertext()))
 
 
-def parse_product(product, html):
+def category_for(tags):
+    for root in ("Products|Cider", "Products|Ready to Drink", "Products|Wine", "Products|Spirits", "Products|Beer"):
+        if root in tags:
+            return "rtd" if root == "Products|Ready to Drink" else ROOT_CATEGORIES[root]
+    if BEER_WITHOUT_ALCOHOL in tags:
+        return "beer"
+    return ROOT_CATEGORIES["Products|Non-Alcoholic"] if "Products|Non-Alcoholic" in tags else None
+
+
+def price_cents(value):
+    try:
+        amount = Decimal(str(value)) * 100
+    except InvalidOperation:
+        return None
+    if amount.is_finite() and 0 < amount <= 2**53 - 1 and amount == amount.to_integral_value():
+        return int(amount)
+    return None
+
+
+def sku_image(url, sku):
+    target = urlsplit(url)
+    match = re.search(r"/(\d+)\.(?:jpg|jpeg|png)(?:\.|$)", target.path, re.I)
+    if target.scheme == "https" and target.netloc in IMAGE_HOSTS and match and int(match[1]) == int(sku):
+        return url.split("?", 1)[0]
+    return None
+
+
+def parse_product(product, html=None):
+    tags = product.get("ec_category") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    category = category_for(tags)
+    if not category:
+        return None
+    name = clean(product.get("ec_name"))
+    packages = " ".join(filter(None, [clean(product.get("lcbo_unit_volume")), clean(product.get("lcbo_selling_package_name"))]))
+    if packages:
+        packages = re.sub(r"(?<=\d) (?=[a-z])", " mL ", packages, count=1, flags=re.I)
+    photo_url = sku_image(clean(product.get("ec_thumbnails")), product["sku"])
+    notes = clean(unescape(str(product.get("lcbo_tastingnotes") or "")).replace("<(>&<)>", "&"))
+    fields = {}
+    if html:
+        name, fields, page_notes, photo, package = page_details(product, html)
+        notes = page_notes or notes
+        photo_url = photo or photo_url
+        packages = package or packages
+    if not name:
+        raise ValueError("Product name is empty")
+    if category == "beer" and re.search(
+        r"\b(?:cider|seltzer|hard lemonade|variety pack|sampler pack|mix pack|mixed pack|sake)\b", identity(name)
+    ):
+        return None
+    profile = fields.get("Style") or None
+    abv = number(fields.get("Alcohol/Vol"))
+    indexed_abv = product.get("lcbo_alcohol_percent")
+    if abv is None:
+        abv = 0.0 if indexed_abv == 0 else number(indexed_abv)
+    origin = fields.get("Made In") or ", ".join(dict.fromkeys(filter(None, [
+        clean(product.get("lcbo_region_name")), clean(product.get("country_of_manufacture")),
+    ])))
+    origin = re.sub(r"^Other,\s*", "", origin)
+    barcode = clean(product.get("upc_number"))
+    category_paths = product.get("ec_category_filter") or []
+    if isinstance(category_paths, str):
+        category_paths = [category_paths]
+    subtype = max((path for path in category_paths if path.count("|") >= 2), key=lambda path: path.count("|"), default="")
+    style = style_for(name, tags, profile) if category == "beer" else (subtype.split("|")[-1] or profile)
+    return {
+        "id": "", "name": name, "category": category, "brand": fields.get("By") or clean(product.get("ec_brand")),
+        "brewery": None, "style": style, "retailStyle": profile,
+        "flavors": [label for label, pattern in FLAVOR_HINTS.items() if re.search(pattern, notes, re.I)],
+        "tastingNotes": notes or None, "abv": abv, "origin": origin or None, "marketRegions": ["ON"],
+        "barcodes": [barcode] if re.fullmatch(r"\d{8,14}", barcode) else [], "lcboSkus": [product["sku"]],
+        "lcboPackages": [{"sku": product["sku"], "size": packages, "regularPriceCents": price_cents(product.get("ec_price"))}],
+        "sources": [{**SOURCE, "url": product["url"]}], "hasPhoto": False, "photoCredit": None,
+        "_image": photo_url, "_package": packages,
+    }
+
+
+def page_details(product, html):
     page = lxml_html.fromstring(html, parser=lxml_html.HTMLParser(encoding="utf-8"))
     titles = page.xpath(f'//h1[{class_is("page-title")}]')
     canonical_urls = page.xpath('//meta[@property="og:url"]/@content')
@@ -183,17 +288,6 @@ def parse_product(product, html):
     if (not titles or not canonical or canonical.scheme != "https" or canonical.netloc != "www.lcbo.com"
             or not canonical_sku or canonical_sku[1] != product["sku"]):
         raise ValueError("Official product page and indexed SKU differ")
-    name = node_text(titles[0])
-    if not name:
-        raise ValueError("Product name is empty")
-    tags = product.get("ec_category") or []
-    if isinstance(tags, str):
-        tags = [tags]
-    if (any(tag.startswith(("Products|Cider", "Products|Coolers", "Products|Wine", "Products|Spirits")) for tag in tags)
-            and not any(tag.startswith(("Products|Beer|Ale", "Products|Beer|Lager")) for tag in tags)):
-        return None
-    if re.search(r"\b(?:cider|seltzer|hard lemonade|variety pack|sampler pack|mix pack|mixed pack|sake)\b", identity(name)):
-        return None
     fields = {}
     for item in page.xpath(f'//div[{class_is("pdp-moredetail-container")}]//li'):
         labels = item.xpath(f'.//div[{class_is("label")}]')
@@ -201,27 +295,8 @@ def parse_product(product, html):
         if labels and values:
             fields[node_text(labels[0])] = node_text(values[0])
     notes = page.xpath(f'//div[{class_is("lcbo-product-details")}]//div[{class_is("testing_note")}]')
-    tasting_notes = node_text(notes[0]) if notes else ""
-    profile = fields.get("Style") or None
-    abv = number(fields.get("Alcohol/Vol"))
-    if abv is None:
-        abv = number(product.get("lcbo_alcohol_percent"))
-    origin = fields.get("Made In") or ", ".join(dict.fromkeys(filter(None, [
-        clean(product.get("lcbo_region_name")), clean(product.get("country_of_manufacture")),
-    ])))
-    origin = re.sub(r"^Other,\s*", "", origin)
-    barcode = next((code for key in ("upc", "ec_upc", "lcbo_upc")
-                    if re.fullmatch(r"\d{8,14}", code := clean(product.get(key)))), None)
     package = page.xpath('//meta[@property="og:description"]/@content')
-    return {
-        "id": "", "name": name, "brand": fields.get("By") or clean(product.get("ec_brand")),
-        "brewery": None, "style": style_for(name, tags, profile), "retailStyle": profile,
-        "flavors": [label for label, pattern in FLAVOR_HINTS.items() if re.search(pattern, tasting_notes, re.I)],
-        "tastingNotes": tasting_notes or None, "abv": abv, "origin": origin or None, "marketRegions": ["ON"],
-        "barcodes": [barcode] if barcode else [], "lcboSkus": [product["sku"]],
-        "sources": [{**SOURCE, "url": product["url"]}], "hasPhoto": False, "photoCredit": None,
-        "_image": image_for(page, product["sku"]), "_package": package[0] if package else "",
-    }
+    return node_text(titles[0]), fields, node_text(notes[0]) if notes else "", image_for(page, product["sku"]), package[0] if package else ""
 
 
 def read_product(product, cache, offline):
@@ -229,15 +304,15 @@ def read_product(product, cache, offline):
     try:
         if path.exists():
             html = gzip.decompress(path.read_bytes())
-        elif offline:
-            raise FileNotFoundError("page absent from cache")
-        else:
+        elif not offline and category_for(product.get("ec_category") or []) == "beer":
             html = get(product["url"], {"www.lcbo.com"})
             path.write_bytes(gzip.compress(html, mtime=0))
             time.sleep(0.18)
+        else:
+            html = None
         return parse_product(product, html), None
     except (requests.RequestException, OSError, ValueError) as error:
-        return None, {"sku": product["sku"], "url": product["url"], "reason": str(error)[:240]}
+        return parse_product(product), {"sku": product["sku"], "url": product["url"], "reason": str(error)[:240]}
 
 
 def group_products(items):
@@ -245,6 +320,11 @@ def group_products(items):
     for item in items:
         # Keep different named releases and ABVs distinct. Missing brand/ABV stays SKU-specific.
         key = (identity(item["brand"]), identity(item["name"]), item["abv"])
+        if item["category"] != "beer":
+            key = (*key, item["category"])
+        if item["category"] == "wine":
+            # Several vintages can have the same displayed name and ABV.
+            key = (*key, item["lcboSkus"][0])
         if not key[0] or key[2] is None:
             key = (*key, item["lcboSkus"][0])
         variants[key].append(item)
@@ -258,6 +338,7 @@ def group_products(items):
         primary["id"] = "lcbo-" + hashlib.sha256(repr(key).encode()).hexdigest()[:24]
         primary["lcboSkus"] = sorted({sku for item in group for sku in item["lcboSkus"]}, key=int)
         primary["barcodes"] = sorted({code for item in group for code in item["barcodes"]})
+        primary["lcboPackages"] = sorted((item["lcboPackages"][0] for item in group), key=lambda item: int(item["sku"]))
         primary["sources"] = [item["sources"][0] for item in group]
         yield primary, [item["_image"] for item in group if item["_image"]]
 
@@ -269,7 +350,7 @@ def cover_for(group, cache, offline):
         try:
             if path.exists():
                 data = path.read_bytes()
-            elif offline:
+            elif offline or entry["category"] not in ("beer", "cider"):
                 continue
             else:
                 data = get(url, IMAGE_HOSTS)
@@ -295,7 +376,7 @@ def build(args):
     pages, images = args.cache / "pages", args.cache / "images"
     pages.mkdir(exist_ok=True)
     images.mkdir(exist_ok=True)
-    index_file = args.cache / "index.json"
+    index_file = args.cache / "index-v2.json"
     if not index_file.exists() or args.refresh_index:
         if args.offline:
             raise ValueError("Offline mode needs a cached index.")
@@ -306,14 +387,14 @@ def build(args):
     excluded = 0
     with ThreadPoolExecutor(max_workers=5) as pool:
         for step, (item, failure) in enumerate(pool.map(lambda row: read_product(row, pages, args.offline), products), 1):
+            if failure:
+                failures.append(failure)
             if item:
                 items.append(item)
-            elif failure:
-                failures.append(failure)
             else:
                 excluded += 1
-            if step % 100 == 0 or step == len(products):
-                print(f"Pages {step}/{len(products)}: {len(items)} beer SKUs, {len(failures)} failed.", flush=True)
+            if step % 2000 == 0 or step == len(products):
+                print(f"Processed {step}/{len(products)}: {len(items)} beverage SKUs.", flush=True)
     if not items:
         raise ValueError("No verified LCBO beer product pages were available.")
     groups = list(group_products(items))
@@ -321,6 +402,7 @@ def build(args):
     temp = args.out.with_suffix(".tmp")
     temp.unlink(missing_ok=True)
     counts = Counter()
+    categories = defaultdict(Counter)
     try:
         with closing(sqlite3.connect(temp)) as db, db, ThreadPoolExecutor(max_workers=5) as pool:
             db.executescript("""
@@ -333,26 +415,34 @@ def build(args):
             downloads = pool.map(lambda group: cover_for(group, images, args.offline), groups)
             for step, ((entry, candidate_images), photo) in enumerate(zip(groups, downloads), 1):
                 del entry["_image"], entry["_package"]
+                if candidate_images and not photo and entry["category"] not in ("beer", "cider"):
+                    entry["onlinePhotoUrl"] = candidate_images[0]
                 if photo:
                     entry["hasPhoto"] = True
                     entry["photoCredit"] = {"label": "LCBO 商品包装照", "url": entry["sources"][0]["url"],
                                             "license": "个人非商业参考", "licenseUrl": TERMS}
                     db.execute("INSERT INTO covers VALUES (?, ?, ?)", (entry["id"], *photo))
-                counts.update(field for field, present in {
+                coverage = [field for field, present in {
                     "brand": entry["brand"], "style": entry["style"], "retailStyle": entry["retailStyle"],
                     "taste": entry["tastingNotes"], "photo": photo, "abv": entry["abv"] is not None,
                     "origin": entry["origin"], "barcode": entry["barcodes"], "imageCandidate": candidate_images,
-                    "complete": entry["brand"] and entry["style"] and entry["tastingNotes"] and photo,
-                }.items() if present)
+                    "onlinePhoto": entry.get("onlinePhotoUrl"),
+                    "price": any(p["regularPriceCents"] is not None for p in entry["lcboPackages"]),
+                    "complete": entry["brand"] and entry["style"] and entry["tastingNotes"] and
+                    (photo or entry.get("onlinePhotoUrl")),
+                }.items() if present]
+                counts.update(coverage)
+                categories[entry["category"]].update(["count", *coverage])
                 db.execute("INSERT INTO beers VALUES (?, ?)", (entry["id"], json.dumps(entry, ensure_ascii=False)))
-                if step % 100 == 0 or step == len(groups):
+                if step % 2000 == 0 or step == len(groups):
                     print(f"Images {step}/{len(groups)}: {counts['photo']} verified photos.", flush=True)
             info = {"dataset": "lcbo", "version": args.as_of, "count": len(groups), "complete": counts["complete"],
-                    "withStyle": counts["style"], "withFlavor": counts["taste"], "withPhoto": counts["photo"],
+                    "withStyle": counts["style"], "withFlavor": counts["taste"], "withPhoto": counts["photo"] + counts["onlinePhoto"],
+                    "withPrice": counts["price"], "withOfflinePhoto": counts["photo"],
                     "sources": [SOURCE]}
             report = {"catalog": info, "retrievedOn": args.as_of, "index": index["categories"], "listedSkus": len(products),
                       "acceptedSkus": len(items), "excludedSkus": excluded, "mergedPackagingSkus": len(items) - len(groups),
-                      "fields": dict(counts), "unavailablePages": failures}
+                      "fields": dict(counts), "byCategory": dict(categories), "unavailablePages": failures}
             db.execute("INSERT INTO metadata VALUES (?, ?)", ("info", json.dumps(info, ensure_ascii=False)))
             db.execute("INSERT INTO metadata VALUES (?, ?)", ("audit", json.dumps(report, ensure_ascii=False)))
         temp.replace(args.out)

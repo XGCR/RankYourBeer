@@ -1,11 +1,11 @@
 # BeerRanking
 
-BeerRanking 是简体中文的 Windows 11 x64 离线啤酒图鉴和个人品饮软件。公共图鉴统一采用 LCBO 官网商品页，包括安大略零售目录收录的本地酒、进口酒和无醇啤酒。[LCBO 图鉴覆盖报告](docs/catalog-coverage.md)
+BeerRanking 是简体中文的 Windows 11 x64 酒款图鉴和个人品饮软件。目录来自 LCBO 官网，覆盖啤酒、苹果酒、葡萄酒、烈酒、即饮酒和无醇饮品。[LCBO 图鉴覆盖报告](docs/catalog-coverage.md)
 
 ## 使用
 
-1. 完成下文的本地目录生成和打包后，运行 `release/BeerRanking-Setup-0.2.0-x64.exe`，从 Windows 开始菜单打开 BeerRanking。安装程序为个人非商业使用准备。
-2. 在「发现图鉴」按品牌、风格、口味或产地筛选。搜索也接受 LCBO 商品编号。打开酒款可查看包装照、酒精度、产地、官方品鉴描述及不同包装对应的商品链接。
+1. 完成下文的本地目录生成和打包后，运行 `release/BeerRanking-Setup-0.3.0-x64.exe`，从 Windows 开始菜单打开 BeerRanking。安装程序为个人非商业使用准备。
+2. 在「发现图鉴」按酒类、风格、口味或常规售价筛选。搜索也接受 LCBO 商品编号。酒款详情按包装显示加元常规价，卡片和价格排序使用最低包装常规价。
 3. 将酒款加入「我的酒单」，也可手动录入。标记为已喝后可填写 0–10 分评分、短评和品饮日期。每款酒可保存一张 JPG 或 PNG 个人封面。
 4. 在「评分排行」查看单品榜或分类平均分。在「数据」中导出当前筛选结果、备份和恢复个人酒单，或加载 LCBO 离线目录包。
 
@@ -24,11 +24,11 @@ npm.cmd run test:desktop
 npm.cmd run dist
 ```
 
-首次获取 Electron 和 NSIS 构建依赖需要联网。安装程序包含运行时、LCBO 目录和本地包装照。
+首次获取 Electron 和 NSIS 构建依赖需要联网。安装程序包含 LCBO 目录、常规价和已下载的啤酒及苹果酒包装照。其余类别的官网包装照在联网时加载。
 
 ## 更新 LCBO 目录
 
-使用 Python 3.11 安装 `scripts/requirements-catalog.txt`。脚本从 LCBO 官网公开列表取得商品链接，逐款解析官方页面。为新快照使用新的缓存目录和采集日期。采集完毕后可用 `--offline` 根据同一份缓存重建。生成的目录及包装照仅供个人非商业离线参考。[LCBO 啤酒集合](https://www.lcbo.com/en/collections/beer) · [LCBO 使用条款](https://www.lcbo.com/content/lcbo/en/corporate-pages/terms-and-conditions.html)
+使用 Python 3.11 安装 `scripts/requirements-catalog.txt`。脚本读取 LCBO 官网公开商品索引的各酒类和每个商品编号的常规价，并从啤酒商品页补充字段。为新快照使用新的缓存目录和采集日期。采集完毕后可用 `--offline` 根据同一份缓存重建。生成的目录及包装照供个人非商业参考。[LCBO 官网](https://www.lcbo.com/en/) · [LCBO 使用条款](https://www.lcbo.com/content/lcbo/en/corporate-pages/terms-and-conditions.html)
 
 ```powershell
 python -m pip install -r scripts/requirements-catalog.txt

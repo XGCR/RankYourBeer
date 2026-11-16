@@ -58,7 +58,7 @@ function Hero({ mode, view, showPhotos }: { mode: Mode; view: View | null; showP
     return <section className="page-intro">
       <span className="eyebrow">{mode === 'library' ? 'MY TASTING JOURNAL' : 'PERSONAL RANKINGS'}</span>
       <h1>{mode === 'library' ? '我的酒单' : '评分排行'}</h1>
-      <p>{mode === 'library' ? '把想喝的酒收藏起来，留下每次品饮的记忆。' : '找出最喜欢的啤酒，按品牌、风格或产地比较评分。'}</p>
+      <p>{mode === 'library' ? '把想喝的酒收藏起来，留下每次品饮的记忆。' : '按品牌、风格或产地比较你的评分。'}</p>
       <div className="personal-stats">
         <span><Bookmark size={16} />{number.format(view?.libraryCount ?? 0)} 款收藏</span>
         <span><Beer size={16} />{number.format(view?.tastedCount ?? 0)} 款已喝</span>
@@ -68,9 +68,9 @@ function Hero({ mode, view, showPhotos }: { mode: Mode; view: View | null; showP
   }
   return <section className="hero">
     <div className="hero-copy">
-      <span className="hero-eyebrow"><span /> LCBO BEER CATALOGUE</span>
+      <span className="hero-eyebrow"><span /> LCBO PRODUCT CATALOGUE</span>
       <h1>下一款，想喝什么？</h1>
-      <p>浏览 LCBO 官网收录的啤酒，按品牌、风格和口味筛选。遇到喜欢的，就收进自己的酒单。</p>
+      <p>浏览 LCBO 官网酒款，按酒类、风格、口味和常规售价筛选。</p>
       <div className="hero-stats">
         <span><Layers3 size={16} /><strong>{view ? number.format(view.catalog.count) : '…'}</strong> 独立酒款</span>
         <button onClick={showPhotos}><ImageIcon size={16} /><strong>{view ? number.format(view.catalog.withPhoto) : '…'}</strong> 款有图 <ArrowRight size={15} /></button>
@@ -180,7 +180,7 @@ export function App() {
     <aside className="sidebar">
       <div className="identity">
         <div className="logo"><Beer size={24} strokeWidth={1.7} /></div>
-        <div><strong>BeerRanking</strong><span>LCBO 啤酒图鉴</span></div>
+        <div><strong>BeerRanking</strong><span>LCBO 酒款图鉴</span></div>
       </div>
       <span className="nav-label">我的空间</span>
       <nav aria-label="主要导航">{modes.map(({ id, title, icon: Icon }) =>
@@ -201,7 +201,7 @@ export function App() {
     <div className="workspace">
       <header className="topbar">
         <div className="breadcrumb"><selectedMode.icon size={16} />{selectedMode.title}</div>
-        <label className="top-search"><Search size={18} /><input aria-label="搜索啤酒" placeholder="搜索酒名、品牌、风格或短评…"
+        <label className="top-search"><Search size={18} /><input aria-label="搜索酒款" placeholder="搜索酒名、品牌、风格或短评…"
           value={query.filters.search} onChange={event => change({ filters: { ...query.filters, search: event.target.value } })} />
           {query.filters.search && <button aria-label="清除搜索" className="icon-button" onClick={() =>
             change({ filters: { ...query.filters, search: '' } })}><X size={16} /></button>}
@@ -216,7 +216,7 @@ export function App() {
               <button disabled={busy} onClick={() => runData('update')}><Database size={16} />加载离线目录包</button>
             </div>
           </details>
-          <button className="button primary" onClick={() => { setDetail(null); setEditor({ entry: null }) }}><Plus size={18} /> 添加啤酒</button>
+          <button className="button primary" onClick={() => { setDetail(null); setEditor({ entry: null }) }}><Plus size={18} /> 添加酒款</button>
         </div>
       </header>
       <main>
@@ -238,7 +238,7 @@ export function App() {
             onRemovePreset={name => void attempt(() => api.removePreset(name)).then(result => result && setPresets(result))}
             onSelectPreset={({ filters, primary, secondary }) => change({ filters, primary, secondary })} />
           <div className="results-header">
-            <h2>{query.mode === 'ranking' ? (group ? groupNames[group] + '排行' : '单品榜') : query.mode === 'library' ? '收藏的啤酒' : '浏览啤酒'}</h2>
+            <h2>{query.mode === 'ranking' ? (group ? groupNames[group] + '排行' : '单品榜') : query.mode === 'library' ? '收藏的酒款' : '浏览酒款'}</h2>
             <span aria-live="polite">{view ? number.format(view.total) + ' 款匹配' : '正在读取…'}</span>
           </div>
           {view && group && view.groups.length > 0 ? <div className="group-table">
@@ -268,7 +268,7 @@ export function App() {
               }}>下一页<ChevronRight size={16} /></button>
             </div>}
           </> : view ? <div className="empty">
-            <Search size={29} /><h3>{query.mode === 'ranking' && !view.scoredCount ? '评分后生成你的排行榜' : '没有找到匹配的啤酒'}</h3>
+            <Search size={29} /><h3>{query.mode === 'ranking' && !view.scoredCount ? '评分后生成你的排行榜' : '没有找到匹配的酒款'}</h3>
             <p>{query.mode === 'library' && !view.libraryCount ? '可以从图鉴添加酒款，也可以新建一款。' : '试试清空筛选或换一个搜索词。'}</p>
             <button className="button outline" onClick={() => query.mode === 'library' && !view.libraryCount
               ? switchMode('discover') : change({ filters: { ...emptyFilters } })}>
@@ -300,11 +300,12 @@ export function App() {
           <p className="muted">快照 {view.catalog.version} · LCBO 安大略零售目录</p>
           <dl className="coverage-grid">
             {[['独立酒款', view.catalog.count], ['有风格', view.catalog.withStyle], ['有包装照', view.catalog.withPhoto],
-              ['有逐款口味', view.catalog.withFlavor], ['资料完整', view.catalog.complete]].map(([label, value]) =>
+              ['有逐款口味', view.catalog.withFlavor], ['资料完整', view.catalog.complete],
+              ...(view.catalog.withPrice === undefined ? [] : [['有常规售价', view.catalog.withPrice]])].map(([label, value]) =>
               <div key={label}><dt>{label}</dt><dd>{number.format(Number(value))}</dd></div>,
             )}
           </dl>
-          <p>资料完整指同时具备品牌、风格、商品品鉴描述和包装照。不同包装的 LCBO 商品编号保留在酒款详情中。</p>
+          <p>常规售价按商品编号记录，以加元显示。价格筛选和排序使用酒款最低的包装常规价。</p>
           <div className="source-list">{view.catalog.sources.map(source => <button className="source-link" key={source.url}
             onClick={() => { void attempt(() => api.openSource(source.url)) }}>{source.label}<small>{source.license}</small><ArrowRight size={14} /></button>)}</div>
         </>}

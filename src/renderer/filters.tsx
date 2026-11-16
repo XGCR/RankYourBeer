@@ -1,23 +1,24 @@
 import { Check, ChevronDown, Plus, Search, SlidersHorizontal, Star, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
-import { emptyFilters, regions, type Facet, type Filters, type Preset, type Query, type SortField, type View, type ViewSettings } from '../shared/model.ts'
+import { categoryLabels, emptyFilters, regions, type Category, type Facet, type Filters, type Preset, type Query, type SortField, type View, type ViewSettings } from '../shared/model.ts'
 import { facetFields, normalize, sortFields } from '../shared/query.ts'
 
 export const facetLabels: Record<Facet, string> = {
-  brands: '品牌 / 酒厂', styles: '风格', flavors: '口味', origins: '产地', regions: '目录地区',
+  categories: '酒类', brands: '品牌 / 酒厂', styles: '风格', flavors: '口味', origins: '产地', regions: '目录地区',
 }
 const sortLabels: Record<SortField, string> = {
-  score: '评分', name: '酒名', brand: '品牌', style: '风格', origin: '产地', abv: '酒精度', date: '品饮日期',
+  score: '评分', name: '酒名', brand: '品牌', style: '风格', origin: '产地', abv: '酒精度', price: '常规价', date: '品饮日期',
 }
 const options = {
   status: { all: '全部状态', tasted: '已喝', untasted: '待尝' },
   completeness: { all: '全部资料', complete: '资料完整', missing: '有待补全' },
   cover: { all: '全部封面', has: '有封面', none: '无封面' },
 }
-type RangeField = 'minScore' | 'maxScore' | 'minAbv' | 'maxAbv'
+type RangeField = 'minScore' | 'maxScore' | 'minAbv' | 'maxAbv' | 'minPrice' | 'maxPrice'
 type ToggleField = keyof typeof options
 
 export function facetLabel(field: Facet, value: string): string {
+  if (field === 'categories') return categoryLabels[value as Category] ?? value
   return field === 'regions' ? regions[value] ?? value : value
 }
 
@@ -120,6 +121,8 @@ export function FilterBar({ query, view, presets, onChange, onSavePreset, onRemo
     { key: 'maxScore', name: '最高评分', max: 10, step: 0.5 },
     { key: 'minAbv', name: '最低酒精度 %', max: 100, step: 0.1 },
     { key: 'maxAbv', name: '最高酒精度 %', max: 100, step: 0.1 },
+    { key: 'minPrice', name: '常规价下限 CAD', max: 1000000, step: 0.01 },
+    { key: 'maxPrice', name: '常规价上限 CAD', max: 1000000, step: 0.01 },
   ]
   const chips = facetFields.flatMap(field => filters[field].map(value => ({
     key: field + value, name: facetLabel(field, value), clear: () => change({ [field]: filters[field].filter(item => item !== value) }),

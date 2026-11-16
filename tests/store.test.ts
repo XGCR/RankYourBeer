@@ -44,6 +44,15 @@ test('bundled public catalogue validates independently of private data', () => {
     assert.ok(catalog.info.count > 500)
     assert.ok([...catalog.entries.values()].every(entry => entry.lcboSkus?.length
       && entry.sources.every(source => new URL(source.url).host === 'www.lcbo.com')))
+    const entries = [...catalog.entries.values()]
+    for (const category of ['beer', 'cider', 'wine', 'spirits', 'rtd', 'non-alcoholic']) {
+      assert.ok(entries.some(entry => entry.category === category))
+    }
+    assert.ok(entries.every(entry => entry.lcboPackages?.length === entry.lcboSkus?.length
+      && entry.lcboPackages?.every(item => item.regularPriceCents !== null)))
+    const cider = entries.find(entry => entry.lcboSkus?.includes('43774'))
+    assert.equal(cider?.category, 'cider')
+    assert.ok(cider?.lcboPackages?.find(item => item.sku === '43774')?.regularPriceCents)
     const example = [...catalog.entries.values()].find(entry => entry.hasPhoto)!
     assert.ok(example.photoCredit?.licenseUrl)
     assert.ok(catalog.photo(example.id, true)?.length)
@@ -65,11 +74,11 @@ test('old personal records relink by official SKU without replacing their photos
       tasted: true, score: 0, review: '保留这条短评', date: '2026-11-08', photo: { action: 'replace', token: 'test' },
     }
     const photo = new Uint8Array([255, 216, 255, 224])
-    database.save(draft, { ...match, id: 'old-guinness', name: '旧记录', lcboSkus: undefined,
+    database.save(draft, { ...match, id: 'old-guinness', name: '旧记录', lcboSkus: undefined, lcboPackages: undefined,
       sources: [{ label: 'LCBO', url: 'https://www.lcbo.com/en/guinness-0-33989', license: '参考' }] },
     { cover: photo, thumb: photo })
     database.save({ ...draft, id: 'old-unmatched', photo: { action: 'keep' } },
-      { ...match, id: 'old-unmatched', name: '私人旧记录', lcboSkus: undefined, barcodes: [], sources: [] })
+      { ...match, id: 'old-unmatched', name: '私人旧记录', lcboSkus: undefined, lcboPackages: undefined, barcodes: [], sources: [] })
     database.relink(catalog.entries)
     database.relink(catalog.entries)
     assert.equal(database.get('old-guinness'), null)

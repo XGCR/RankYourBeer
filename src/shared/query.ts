@@ -1,21 +1,30 @@
 import {
-  emptyFilters, pageSize, type Entry, type Facet, type Filters, type Group,
+  categoryLabels, emptyFilters, pageSize, type Beer, type Entry, type Facet, type Filters, type Group,
   type GroupField, type Query, type Sort, type SortField, type ViewSettings,
 } from './model.ts'
 
 const collator = new Intl.Collator('zh-CN', { sensitivity: 'base', numeric: true })
-export const facetFields = ['brands', 'styles', 'flavors', 'origins', 'regions'] as const
-export const sortFields = ['score', 'name', 'brand', 'style', 'origin', 'abv', 'date'] as const
+export const facetFields = ['categories', 'brands', 'styles', 'flavors', 'origins', 'regions'] as const
+export const sortFields = ['score', 'name', 'brand', 'style', 'origin', 'abv', 'price', 'date'] as const
+
+export function lowestPrice(entry: Beer): number | null {
+  let price: number | null = null
+  for (const item of entry.lcboPackages ?? []) {
+    if (item.regularPriceCents !== null && (price === null || item.regularPriceCents < price)) price = item.regularPriceCents
+  }
+  return price
+}
 
 export function normalize(value: string): string {
   return value.normalize('NFKD').replace(/\p{M}/gu, '').trim().toLowerCase()
 }
 
 export function complete(entry: Entry): boolean {
-  return Boolean(entry.brand && entry.style && entry.tastingNotes && entry.hasPhoto)
+  return Boolean(entry.brand && entry.style && entry.tastingNotes && (entry.hasPhoto || entry.onlinePhotoUrl))
 }
 
 const facetValues: Record<Facet, (entry: Entry) => (string | null)[]> = {
+  categories: entry => [entry.category ?? (entry.lcboSkus?.length ? 'beer' : null)],
   brands: entry => [entry.brand],
   styles: entry => [entry.style],
   flavors: entry => entry.flavors,
@@ -52,7 +61,7 @@ export function filterEntries(entries: Entry[], filters: Filters): Entry[] {
     if (terms.length) {
       const haystack = normalize([
         entry.name, entry.brand, entry.brewery, entry.style, entry.record?.review,
-        entry.retailStyle, ...entry.flavors, ...entry.barcodes, ...(entry.lcboSkus ?? []),
+        entry.retailStyle, entry.category && categoryLabels[entry.category], ...entry.flavors, ...entry.barcodes, ...(entry.lcboSkus ?? []),
       ].filter(Boolean).join(' '))
       if (!terms.every(term => haystack.includes(term))) return false
     }
@@ -61,9 +70,11 @@ export function filterEntries(entries: Entry[], filters: Filters): Entry[] {
     )) return false
     if (filters.status !== 'all' && Boolean(entry.record?.tasted) !== (filters.status === 'tasted')) return false
     if (filters.completeness !== 'all' && complete(entry) !== (filters.completeness === 'complete')) return false
-    if (filters.cover !== 'all' && Boolean(entry.hasPhoto || entry.record?.hasPhoto) !== (filters.cover === 'has')) return false
+    if (filters.cover !== 'all' && Boolean(entry.hasPhoto || entry.onlinePhotoUrl || entry.record?.hasPhoto) !== (filters.cover === 'has')) return false
+    const price = lowestPrice(entry)
     return inRange(entry.record?.score ?? null, filters.minScore, filters.maxScore)
       && inRange(entry.abv, filters.minAbv, filters.maxAbv)
+      && inRange(price === null ? null : price / 100, filters.minPrice, filters.maxPrice)
   })
 }
 
@@ -74,6 +85,7 @@ const sortValues: Record<SortField, (entry: Entry) => string | number | null> = 
   style: entry => entry.style,
   origin: entry => entry.origin,
   abv: entry => entry.abv,
+  price: lowestPrice,
   date: entry => entry.record?.date ?? null,
 }
 
@@ -162,6 +174,8 @@ export function cleanSettings(input: unknown): ViewSettings {
   result.maxScore = optionalNumber(raw.maxScore, 10)
   result.minAbv = optionalNumber(raw.minAbv, 100)
   result.maxAbv = optionalNumber(raw.maxAbv, 100)
+  result.minPrice = optionalNumber(raw.minPrice, 1000000)
+  result.maxPrice = optionalNumber(raw.maxPrice, 1000000)
   const first = sortValue(primary) ?? { field: 'name', direction: 'asc' }
   const second = sortValue(secondary)
   return { filters: result, primary: first, secondary: second?.field === first.field ? null : second }
@@ -184,9 +198,14 @@ function csvCell(value: string | number | null | undefined): string {
 }
 
 export function makeCsv(rows: Entry[]): string {
-  const header = ['酒名', '品牌', '酒厂', '风格', 'LCBO 风味风格', '口味', '酒精度 (%)', '产地', 'LCBO 商品编号', '加拿大地区依据', '状态', '评分', '日期', '短评', '来源']
+  const header = ['酒名', '品牌', '酒厂', '类别', '风格', 'LCBO 风味风格', '口味', '酒精度 (%)', '产地', 'LCBO 商品编号',
+    'LCBO 最低包装常规价 (CAD)', 'LCBO 各包装常规价 (CAD)', '加拿大地区依据', '状态', '评分', '日期', '短评', '来源']
   const lines = rows.map(entry => [
-    entry.name, entry.brand, entry.brewery, entry.style, entry.retailStyle, entry.flavors.join('、'), entry.abv, entry.origin, entry.lcboSkus?.join('、'),
+    entry.name, entry.brand, entry.brewery, entry.category && categoryLabels[entry.category], entry.style,
+    entry.retailStyle, entry.flavors.join('、'), entry.abv, entry.origin, entry.lcboSkus?.join('、'),
+    lowestPrice(entry) === null ? null : (lowestPrice(entry)! / 100).toFixed(2),
+    entry.lcboPackages?.filter(item => item.regularPriceCents !== null)
+      .map(item => [item.sku, item.size, (item.regularPriceCents! / 100).toFixed(2)].filter(Boolean).join(' ')).join(' / '),
     entry.marketRegions.join('、'), entry.record?.tasted ? '已喝' : entry.record ? '待尝' : '图鉴',
     entry.record?.score, entry.record?.date, entry.record?.review, entry.sources.map(source => source.url).join(' '),
   ])

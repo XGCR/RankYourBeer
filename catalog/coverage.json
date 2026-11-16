@@ -1,12 +1,14 @@
 {
   "catalog": {
     "dataset": "lcbo",
-    "version": "2026-11-08",
-    "count": 1618,
-    "complete": 1051,
-    "withStyle": 1549,
-    "withFlavor": 1288,
-    "withPhoto": 1465,
+    "version": "2026-11-16",
+    "count": 20553,
+    "complete": 9016,
+    "withStyle": 20331,
+    "withFlavor": 17577,
+    "withPhoto": 20392,
+    "withPrice": 20553,
+    "withOfflinePhoto": 1619,
     "sources": [
       {
         "label": "LCBO 官网",
@@ -15,31 +17,133 @@
       }
     ]
   },
-  "retrievedOn": "2026-11-08",
+  "retrievedOn": "2026-11-16",
   "index": {
     "Products|Beer": {
-      "reported": 1915,
-      "received": 1915
+      "reported": 1916,
+      "received": 1916
     },
-    "Products|Non-Alcoholic|De-Alcoholized Beer": {
-      "reported": 0,
-      "received": 0
+    "Products|Cider": {
+      "reported": 163,
+      "received": 163
+    },
+    "Products|Wine": {
+      "reported": 15284,
+      "received": 15284
+    },
+    "Products|Spirits": {
+      "reported": 3231,
+      "received": 3231
+    },
+    "Products|Ready-to-Drink": {
+      "reported": 642,
+      "received": 642
+    },
+    "Products|Non-Alcoholic": {
+      "reported": 59,
+      "received": 59
     }
   },
-  "listedSkus": 1915,
-  "acceptedSkus": 1864,
-  "excludedSkus": 51,
-  "mergedPackagingSkus": 246,
+  "listedSkus": 21202,
+  "acceptedSkus": 21159,
+  "excludedSkus": 43,
+  "mergedPackagingSkus": 606,
   "fields": {
-    "brand": 1502,
-    "style": 1549,
-    "retailStyle": 1434,
-    "taste": 1288,
-    "photo": 1465,
-    "abv": 1598,
-    "origin": 1617,
-    "imageCandidate": 1618,
-    "complete": 1051
+    "brand": 10942,
+    "style": 20331,
+    "retailStyle": 1438,
+    "taste": 17577,
+    "photo": 1619,
+    "abv": 20495,
+    "origin": 20531,
+    "barcode": 12771,
+    "imageCandidate": 20553,
+    "price": 20553,
+    "complete": 9016,
+    "onlinePhoto": 18773
+  },
+  "byCategory": {
+    "beer": {
+      "count": 1621,
+      "brand": 1501,
+      "style": 1554,
+      "retailStyle": 1437,
+      "taste": 1292,
+      "photo": 1464,
+      "abv": 1612,
+      "origin": 1620,
+      "barcode": 1235,
+      "imageCandidate": 1621,
+      "price": 1621,
+      "complete": 1052
+    },
+    "spirits": {
+      "count": 2858,
+      "brand": 2189,
+      "style": 2852,
+      "taste": 2509,
+      "abv": 2853,
+      "origin": 2854,
+      "barcode": 1867,
+      "imageCandidate": 2858,
+      "onlinePhoto": 2858,
+      "price": 2858,
+      "complete": 1931
+    },
+    "wine": {
+      "count": 15278,
+      "brand": 6532,
+      "style": 15132,
+      "taste": 13048,
+      "abv": 15237,
+      "origin": 15262,
+      "barcode": 9121,
+      "imageCandidate": 15278,
+      "onlinePhoto": 15278,
+      "price": 15278,
+      "complete": 5373
+    },
+    "rtd": {
+      "count": 617,
+      "brand": 562,
+      "style": 615,
+      "taste": 561,
+      "abv": 617,
+      "origin": 617,
+      "barcode": 425,
+      "imageCandidate": 617,
+      "onlinePhoto": 616,
+      "price": 617,
+      "complete": 514,
+      "retailStyle": 1,
+      "photo": 1
+    },
+    "cider": {
+      "count": 158,
+      "brand": 150,
+      "style": 158,
+      "taste": 147,
+      "photo": 154,
+      "abv": 156,
+      "origin": 158,
+      "barcode": 114,
+      "imageCandidate": 158,
+      "price": 158,
+      "complete": 139
+    },
+    "non-alcoholic": {
+      "count": 21,
+      "brand": 8,
+      "style": 20,
+      "taste": 20,
+      "abv": 20,
+      "origin": 20,
+      "barcode": 9,
+      "imageCandidate": 21,
+      "onlinePhoto": 21,
+      "price": 21,
+      "complete": 7
+    }
   },
   "unavailablePages": []
 }

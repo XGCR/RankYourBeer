@@ -26,6 +26,8 @@ test('offline catalogue, personal journal, presets, CSV, restore and catalogue u
   const data = mkdtempSync(join(work, 'desktop-test-'))
   const original = new CatalogStore(bundle)
   const item = [...original.entries.values()].find(entry => entry.lcboSkus?.includes('33989'))!
+  const cider = [...original.entries.values()].find(entry => entry.lcboSkus?.includes('43774'))!
+  const ciderPrice = cider.lcboPackages?.find(pack => pack.sku === '43774')?.regularPriceCents ?? 0
   expect(item.hasPhoto).toBe(true)
   const itemButton = { name: '查看 ' + item.name, exact: true }
   const imagePath = join(data, 'personal-test.jpg')
@@ -63,7 +65,15 @@ test('offline catalogue, personal journal, presets, CSV, restore and catalogue u
     await page.locator('.hero-stats button').click()
     await expect(page.locator('.beer-card img').first()).toBeVisible()
     await page.screenshot({ path: join(work, 'qa', 'photos.png') })
-    const search = page.getByRole('textbox', { name: '搜索啤酒' })
+    const search = page.getByRole('textbox', { name: '搜索酒款' })
+    await search.fill('43774')
+    await page.locator('summary').filter({ hasText: /^酒类/ }).click()
+    await page.getByLabel('苹果酒', { exact: true }).check()
+    await page.locator('summary').filter({ hasText: /^酒类/ }).click()
+    await page.getByRole('button', { name: '查看 ' + cider.name, exact: true }).click()
+    await expect(page.getByRole('dialog', { name: '酒款详情' })).toContainText('CA$' + (ciderPrice / 100).toFixed(2))
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+    await page.getByRole('button', { name: '移除筛选 苹果酒' }).click()
     await search.fill('33989')
     await page.locator('summary').filter({ hasText: /^风格/ }).click()
     await page.getByLabel(item.style!, { exact: true }).check()
@@ -72,6 +82,7 @@ test('offline catalogue, personal journal, presets, CSV, restore and catalogue u
     await page.getByRole('button', itemButton).click()
     await expect(page.getByRole('dialog', { name: '酒款详情' })).toContainText('咖啡')
     await expect(page.getByRole('dialog', { name: '酒款详情' })).toContainText('LCBO 商品编号')
+    await expect(page.getByRole('dialog', { name: '酒款详情' })).toContainText('LCBO 常规售价')
     await expect.poll(() => page.locator('.detail-image img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
     await page.getByRole('button', { name: '加入我的酒单' }).click()
     await page.getByLabel('标记为已喝').check()
@@ -159,7 +170,7 @@ test('offline catalogue, personal journal, presets, CSV, restore and catalogue u
     await page.getByRole('navigation').getByRole('button', { name: /我的酒单/ }).click()
     await expect(page.getByRole('button', itemButton)).toBeVisible()
     await expect(page.locator('.score-badge').first()).toContainText('0.0')
-    await page.getByRole('button', { name: '添加啤酒' }).click()
+    await page.getByRole('button', { name: '添加酒款' }).click()
     const form = page.getByRole('dialog', { name: '品饮记录' })
     await form.getByLabel('酒名').fill('Manual Test Lager')
     await form.getByLabel('品牌 / 酒厂').fill('Test Brewery')
@@ -169,7 +180,7 @@ test('offline catalogue, personal journal, presets, CSV, restore and catalogue u
     await expect(page.getByRole('dialog', { name: '酒款详情' })).toContainText('Manual Test Lager')
     await page.getByRole('button', { name: '关闭', exact: true }).click()
     await page.getByRole('navigation').getByRole('button', { name: '发现图鉴' }).click()
-    await page.getByRole('textbox', { name: '搜索啤酒' }).fill('Manual Test Lager')
+    await page.getByRole('textbox', { name: '搜索酒款' }).fill('Manual Test Lager')
     await expect(page.getByText('0 款匹配')).toBeVisible()
   } finally {
     await app.close()

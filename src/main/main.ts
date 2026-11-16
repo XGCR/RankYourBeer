@@ -126,7 +126,7 @@ async function updateCatalog() {
     candidate.close()
     const resultDialog = await dialog.showMessageBox(attachedWindow(), {
       type: 'question', buttons: ['更新目录', '取消'], defaultId: 0, cancelId: 1,
-      title: '更新公开目录', message: `加载 ${info.count.toLocaleString('zh-CN')} 款啤酒？`,
+      title: '更新公开目录', message: `加载 ${info.count.toLocaleString('zh-CN')} 款酒？`,
       detail: '你的酒单、评分、短评和个人照片会继续保留。',
     })
     if (resultDialog.response !== 0) return null
@@ -165,7 +165,7 @@ function registerIpc() {
     if ((!id || id.startsWith('personal-')) && typeof draft.name === 'string' && typeof draft.brand === 'string'
       && getEntries().some(entry => entry.id !== id && sameBeer(entry, draft.name, draft.brand)
         && (entry.abv === null || draft.abv === null || Math.abs(entry.abv - draft.abv) <= 0.15))) {
-      throw new Error('此品牌下已有同名啤酒。请在图鉴搜索并打开该条目。')
+      throw new Error('此品牌下已有同名酒款。请在图鉴搜索并打开该条目。')
     }
     const staged = pendingPhoto
     const photo = staged && draft.photo?.action === 'replace' && staged.token === draft.photo.token ? staged.photo : undefined
@@ -264,7 +264,16 @@ async function start() {
   installedCatalog = join(data, 'lcbo-catalog.sqlite')
   bundledCatalog = app.isPackaged ? join(process.resourcesPath, 'beer-catalog.sqlite') : join(app.getAppPath(), 'catalog', 'beer-catalog.sqlite')
   libraryPath = join(data, 'library.sqlite')
-  catalog = new CatalogStore(existsSync(installedCatalog) ? installedCatalog : bundledCatalog)
+  catalog = new CatalogStore(bundledCatalog)
+  if (existsSync(installedCatalog)) {
+    const installed = new CatalogStore(installedCatalog)
+    if (installed.info.withPrice !== undefined || catalog.info.withPrice === undefined) {
+      catalog.close()
+      catalog = installed
+    } else {
+      installed.close()
+    }
+  }
   library = new LibraryStore(libraryPath)
   library.relink(catalog.entries)
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -273,7 +282,7 @@ async function start() {
   registerIpc()
   window = new BrowserWindow({
     width: 1370, height: 900, minWidth: 920, minHeight: 650, show: false,
-    title: 'BeerRanking · LCBO 啤酒图鉴', autoHideMenuBar: true, backgroundColor: '#f6f6f1',
+    title: 'BeerRanking · LCBO 酒款图鉴', autoHideMenuBar: true, backgroundColor: '#f6f6f1',
     icon: app.isPackaged ? undefined : join(app.getAppPath(), 'assets', 'beer.ico'),
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,

@@ -1,8 +1,8 @@
 {
   "name": "beer-ranking",
   "productName": "BeerRanking",
-  "version": "0.2.0",
-  "description": "LCBO 啤酒图鉴与个人品饮记录",
+  "version": "0.3.0",
+  "description": "LCBO 酒款图鉴与个人品饮记录",
   "author": "BeerRanking",
   "private": true,
   "type": "module",

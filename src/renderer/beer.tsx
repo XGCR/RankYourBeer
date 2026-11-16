@@ -1,6 +1,11 @@
 import { Beer as BeerIcon, Bookmark, Calendar, Camera, Check, ExternalLink, ImagePlus, MapPin, Pencil, Star, Trash2, X } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { regions, type Draft, type Entry } from '../shared/model.ts'
+import { categoryLabels, regions, type Draft, type Entry } from '../shared/model.ts'
+import { lowestPrice } from '../shared/query.ts'
+
+function cad(cents: number) {
+  return 'CA$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 export function imageUrl(id: string, kind: 'public' | 'personal', full = false) {
   return '/covers/' + kind + '/' + (full ? 'full/' : 'thumb/') + id
@@ -8,8 +13,9 @@ export function imageUrl(id: string, kind: 'public' | 'personal', full = false) 
 
 export function ProductImage({ entry, personal = false, full = false }: { entry: Entry; personal?: boolean; full?: boolean }) {
   const [failed, setFailed] = useState(false)
-  const image = personal ? entry.record?.hasPhoto : entry.hasPhoto
-  if (image && !failed) return <img src={imageUrl(entry.id, personal ? 'personal' : 'public', full)} alt={entry.name}
+  const local = personal ? entry.record?.hasPhoto : entry.hasPhoto
+  const source = local ? imageUrl(entry.id, personal ? 'personal' : 'public', full) : personal ? null : entry.onlinePhotoUrl
+  if (source && !failed) return <img src={source} alt={entry.name} referrerPolicy="no-referrer"
     loading={full ? 'eager' : 'lazy'} onError={() => setFailed(true)} />
   return <div className={'beer-placeholder tone-' + (entry.name.codePointAt(0) ?? 0) % 5} aria-label="暂无图片">
     <BeerIcon size={full ? 55 : 38} strokeWidth={1.25} />
@@ -24,7 +30,8 @@ export function Score({ value }: { value: number }) {
 export function BeerCard({ entry, open, preferPersonal, rank }: {
   entry: Entry; open: () => void; preferPersonal: boolean; rank?: number
 }) {
-  const personal = Boolean((preferPersonal || !entry.hasPhoto) && entry.record?.hasPhoto)
+  const personal = Boolean((preferPersonal || (!entry.hasPhoto && !entry.onlinePhotoUrl)) && entry.record?.hasPhoto)
+  const price = lowestPrice(entry)
   return <button className="beer-card" onClick={open} aria-label={'查看 ' + entry.name}>
     <div className="card-image">
       <ProductImage key={entry.id + personal} entry={entry} personal={personal} />
@@ -35,8 +42,11 @@ export function BeerCard({ entry, open, preferPersonal, rank }: {
     <div className="card-body">
       <div className="card-brand">{entry.brand || '品牌待补充'}</div>
       <h3 title={entry.name}>{entry.name}</h3>
-      <div className="card-meta"><span>{entry.style || '风格待补充'}</span>
+      <div className="card-meta"><span>{[entry.category && categoryLabels[entry.category], entry.style].filter(Boolean).join(' · ') || '风格待补充'}</span>
         {entry.abv !== null && <span>{entry.abv}%</span>}</div>
+      {entry.lcboSkus?.length ? <div className="card-price">
+        {price === null ? '常规价待补充' : cad(price) + (entry.lcboPackages?.some(pack => pack.regularPriceCents !== price) ? ' 起' : '')}
+      </div> : null}
     </div>
   </button>
 }
@@ -70,7 +80,7 @@ export function BeerDetail({ entry, onEdit, onDelete, openSource }: {
   return <div className="detail">
     <div className="detail-photo">
       <div className="detail-image"><ProductImage entry={entry} full /></div>
-      <p className="photo-caption"><Camera size={14} /> {entry.hasPhoto ? '产品包装照' : '包装照待补充'}</p>
+      <p className="photo-caption"><Camera size={14} /> {entry.hasPhoto ? '产品包装照' : entry.onlinePhotoUrl ? 'LCBO 在线包装照' : '包装照待补充'}</p>
       {entry.photoCredit && <div className="photo-credit">
         <button className="link-button" onClick={() => openSource(entry.photoCredit!.url)}>{entry.photoCredit.label}</button>
         <button className="link-button" onClick={() => openSource(entry.photoCredit!.licenseUrl)}>{entry.photoCredit.license}</button>
@@ -80,6 +90,7 @@ export function BeerDetail({ entry, onEdit, onDelete, openSource }: {
       <div className="eyebrow">{entry.brand || '品牌待补充'}</div>
       <h2>{entry.name}</h2>
       <div className="chip-row">
+        {entry.category && <span className="chip">{categoryLabels[entry.category]}</span>}
         {entry.style && <span className="chip">{entry.style}</span>}
         {entry.abv !== null && <span className="chip">{entry.abv}% ABV</span>}
         {entry.origin && <span className="chip"><MapPin size={13} />{entry.origin}</span>}
@@ -88,6 +99,13 @@ export function BeerDetail({ entry, onEdit, onDelete, openSource }: {
       {entry.retailStyle && entry.retailStyle !== entry.style && <p className="muted">LCBO 风味风格 · {entry.retailStyle}</p>}
       {entry.lcboSkus?.length ? <p className="muted">LCBO 商品编号 · {entry.lcboSkus.join('、')}</p> : null}
       {entry.marketRegions.length > 0 && <p className="muted">目录地区 · {entry.marketRegions.map(code => regions[code] ?? code).join('、')}</p>}
+      {entry.lcboPackages?.length ? <section className="detail-section">
+        <h3>LCBO 常规售价</h3>
+        <ul className="package-prices">{entry.lcboPackages.map(pack =>
+          <li key={pack.sku}><span>{pack.size || '规格待补充'} <small>#{pack.sku}</small></span>
+            <strong>{pack.regularPriceCents === null ? '暂无售价' : cad(pack.regularPriceCents)}</strong></li>,
+        )}</ul>
+      </section> : null}
       <section className="detail-section">
         <h3>口味资料</h3>
         {entry.flavors.length > 0 && <div className="chip-row">{entry.flavors.map(flavor => <span className="chip flavor" key={flavor}>{flavor}</span>)}</div>}
@@ -150,7 +168,7 @@ export function BeerForm({ entry, styles, close, onSave, onPhoto }: {
     }
   }}>
     <div className="eyebrow">MY TASTING JOURNAL</div>
-    <h2>{entry ? entry.record ? '编辑品饮记录' : '加入我的酒单' : '添加一款啤酒'}</h2>
+    <h2>{entry ? entry.record ? '编辑品饮记录' : '加入我的酒单' : '添加酒款'}</h2>
     {editable ? <div className="form-grid">
       <label>酒名<input required maxLength={160} value={draft.name} onChange={event => set('name', event.target.value)} /></label>
       <label>品牌 / 酒厂<input required maxLength={160} value={draft.brand} onChange={event => set('brand', event.target.value)} /></label>

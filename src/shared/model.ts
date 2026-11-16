@@ -11,10 +11,22 @@ export interface PhotoCredit {
   licenseUrl: string
 }
 
+export const categoryLabels = {
+  beer: '啤酒', cider: '苹果酒', wine: '葡萄酒', spirits: '烈酒', rtd: '即饮酒', 'non-alcoholic': '无醇饮品',
+}
+export type Category = keyof typeof categoryLabels
+
+export interface LcboPackage {
+  sku: string
+  size: string
+  regularPriceCents: number | null
+}
+
 export interface Beer {
   id: string
   name: string
   brand: string
+  category?: Category
   brewery: string | null
   style: string | null
   retailStyle?: string | null
@@ -25,6 +37,8 @@ export interface Beer {
   marketRegions: string[]
   barcodes: string[]
   lcboSkus?: string[]
+  lcboPackages?: LcboPackage[]
+  onlinePhotoUrl?: string
   sources: Source[]
   hasPhoto: boolean
   photoCredit: PhotoCredit | null
@@ -43,9 +57,9 @@ export interface Entry extends Beer {
 }
 
 export type Mode = 'discover' | 'library' | 'ranking'
-export type SortField = 'score' | 'name' | 'brand' | 'style' | 'origin' | 'abv' | 'date'
+export type SortField = 'score' | 'name' | 'brand' | 'style' | 'origin' | 'abv' | 'price' | 'date'
 export type GroupField = 'brand' | 'style' | 'origin'
-export type Facet = 'brands' | 'styles' | 'flavors' | 'origins' | 'regions'
+export type Facet = 'categories' | 'brands' | 'styles' | 'flavors' | 'origins' | 'regions'
 export interface Sort {
   field: SortField
   direction: 'asc' | 'desc'
@@ -53,6 +67,7 @@ export interface Sort {
 
 export interface Filters {
   search: string
+  categories: string[]
   brands: string[]
   styles: string[]
   flavors: string[]
@@ -65,6 +80,8 @@ export interface Filters {
   maxScore: number | null
   minAbv: number | null
   maxAbv: number | null
+  minPrice: number | null
+  maxPrice: number | null
 }
 
 export interface ViewSettings {
@@ -94,6 +111,8 @@ export interface CatalogInfo {
   withStyle: number
   withFlavor: number
   withPhoto: number
+  withPrice?: number
+  withOfflinePhoto?: number
   sources: Source[]
 }
 
@@ -145,9 +164,9 @@ export interface DesktopApi {
 }
 
 export const emptyFilters: Filters = {
-  search: '', brands: [], styles: [], flavors: [], origins: [], regions: [],
+  search: '', categories: [], brands: [], styles: [], flavors: [], origins: [], regions: [],
   status: 'all', completeness: 'all', cover: 'all',
-  minScore: null, maxScore: null, minAbv: null, maxAbv: null,
+  minScore: null, maxScore: null, minAbv: null, maxAbv: null, minPrice: null, maxPrice: null,
 }
 
 export const pageSize = 36

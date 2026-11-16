@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import type { Beer, CatalogInfo, Draft, Entry, Preset, RecordSummary } from '../shared/model.ts'
+import { categoryLabels, type Beer, type CatalogInfo, type Draft, type Entry, type Preset, type RecordSummary } from '../shared/model.ts'
 import { cleanSettings, normalize } from '../shared/query.ts'
 
 export const catalogApplicationId = 0x42524341
@@ -69,6 +69,14 @@ function checkBeer(beer: Beer, id: string): boolean {
     )
     && (beer.retailStyle == null || typeof beer.retailStyle === 'string')
     && (beer.lcboSkus === undefined || (Array.isArray(beer.lcboSkus) && beer.lcboSkus.every(sku => typeof sku === 'string' && /^\d+$/.test(sku))))
+    && (beer.category === undefined || Object.hasOwn(categoryLabels, beer.category))
+    && (beer.lcboPackages === undefined || (Array.isArray(beer.lcboPackages) && beer.lcboPackages.every(item =>
+      item && typeof item.sku === 'string' && /^\d+$/.test(item.sku) && beer.lcboSkus?.includes(item.sku)
+      && typeof item.size === 'string' && (item.regularPriceCents === null
+        || (Number.isSafeInteger(item.regularPriceCents) && item.regularPriceCents > 0)),
+    )))
+    && (beer.onlinePhotoUrl === undefined || (typeof beer.onlinePhotoUrl === 'string'
+      && /^https:\/\/aem\.lcbo\.com\/content\/dam\/lcbo\/products\/[\w/.()-]+$/i.test(beer.onlinePhotoUrl)))
     && typeof beer.hasPhoto === 'boolean'
     && (beer.photoCredit === null || ['label', 'url', 'license', 'licenseUrl'].every(key =>
       typeof beer.photoCredit?.[key as keyof typeof beer.photoCredit] === 'string',
@@ -109,7 +117,7 @@ export class CatalogStore {
       if (verify) {
         const photoIds = new Set(db.prepare('SELECT id FROM covers').all().map(row => row.id))
         if ([...this.entries.values()].some(beer => beer.hasPhoto !== photoIds.has(beer.id))
-          || photoIds.size !== this.info.withPhoto
+          || photoIds.size !== (this.info.withOfflinePhoto ?? this.info.withPhoto)
           || db.prepare("SELECT 1 FROM covers WHERE hex(substr(cover, 1, 3)) != 'FFD8FF' OR hex(substr(thumb, 1, 3)) != 'FFD8FF' LIMIT 1").get()) {
           throw new Error('目录照片与酒款索引不符。')
         }
@@ -353,7 +361,7 @@ export function mergeEntries(catalog: Map<string, Beer>, library: Map<string, En
     ...[...catalog.values()].map(beer => ({ ...beer, record: library.get(beer.id)?.record ?? null })),
     ...[...library.values()].filter(beer => !catalog.has(beer.id)).map(beer => beer.id.startsWith('personal-') ? beer : ({
       ...beer, brewery: null, style: null, retailStyle: null, abv: null, origin: null,
-      barcodes: [], lcboSkus: [], flavors: [], tastingNotes: null, marketRegions: [], sources: [],
+      barcodes: [], lcboSkus: [], lcboPackages: [], onlinePhotoUrl: undefined, flavors: [], tastingNotes: null, marketRegions: [], sources: [],
       hasPhoto: false, photoCredit: null,
     })),
   ]

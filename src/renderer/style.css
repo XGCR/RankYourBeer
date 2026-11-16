@@ -221,6 +221,10 @@ main { min-height: 0; min-width: 0; overflow: auto; }
 .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 3px; color: var(--muted); font-size: 11px; }
 .card-meta span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta span:nth-child(2) { white-space: nowrap; color: var(--pine); font-weight: 600; }
+.card-price { color: var(--pine); font-weight: 700; font-variant-numeric: tabular-nums; }
+.package-prices { list-style: none; margin: 7px 0 0; padding: 0; }
+.package-prices li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; }
+.package-prices small { color: var(--muted); }
 .card-badge { position: absolute; right: 7px; top: 7px; }
 .card-state { padding: 3px 6px; border-radius: 6px; background: #f9fcf6; font-size: 11px; color: var(--pine); }
 .score-badge {

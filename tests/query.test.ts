@@ -49,3 +49,22 @@ test('unknown ABV sorts last in either direction, CSV uses the same row order', 
   }
   assert.match(makeCsv([entry('six', '=@formula', { brand: 'B, "C"' })]), /"'=@formula","B, ""C"""/u)
 })
+
+test('category and regular price filter on the lowest listed package', () => {
+  const ciders = [
+    entry('one', 'Multiple packages', { category: 'cider', lcboPackages: [
+      { sku: '101', size: '4 x 500 mL', regularPriceCents: 1500 },
+      { sku: '102', size: '500 mL', regularPriceCents: 425 },
+    ] }),
+    entry('two', 'Single package', { category: 'cider', lcboPackages: [
+      { sku: '103', size: '500 mL', regularPriceCents: 550 },
+    ] }),
+    entry('three', 'No price', { category: 'cider' }),
+    entry('four', 'Other category', { category: 'beer' }),
+  ]
+  const scope = { filters: { categories: ['cider'] }, primary: { field: 'price', direction: 'desc' } }
+  assert.deepEqual(queryEntries(ciders, cleanQuery(scope)).rows.map(row => row.id), ['two', 'one', 'three'])
+  const filtered = queryEntries(ciders, cleanQuery({ ...scope, filters: { ...scope.filters, maxPrice: 5 } }))
+  assert.deepEqual(filtered.rows.map(row => row.id), ['one'])
+  assert.match(makeCsv(filtered.rows), /"4\.25","101 4 x 500 mL 15\.00 \/ 102 500 mL 4\.25"/u)
+})
