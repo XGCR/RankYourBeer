@@ -116,6 +116,11 @@ export interface CatalogInfo {
   sources: Source[]
 }
 
+export interface TastingDay {
+  date: string
+  drinks: Pick<Beer, 'id' | 'name'>[]
+}
+
 export interface View {
   rows: Entry[]
   total: number
@@ -127,6 +132,7 @@ export interface View {
   libraryCount: number
   tastedCount: number
   scoredCount: number
+  tastingDays?: TastingDay[]
 }
 
 export interface Preset extends ViewSettings {

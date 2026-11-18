@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { emptyFilters, pageSize, type Draft, type Entry, type Facet, type GroupField, type Mode, type Preset, type Query, type View, type ViewSettings } from '../shared/model.ts'
 import { BeerCard, BeerDetail, BeerForm, Modal } from './beer.tsx'
 import { FilterBar } from './filters.tsx'
+import { TastingCalendar } from './tasting-calendar.tsx'
 
 const api = window.beerRanking
 const number = new Intl.NumberFormat('zh-CN')
@@ -222,6 +223,7 @@ export function App() {
       <main>
         <div className="page">
           <Hero mode={query.mode} view={view} showPhotos={() => change({ filters: { ...query.filters, cover: 'has' } })} />
+          {query.mode === 'library' && view?.tastingDays && <TastingCalendar days={view.tastingDays} onOpen={openEntry} />}
           {query.mode === 'ranking' && <div className="ranking-tabs" aria-label="排行榜分组">
             <button className={!group ? 'active' : ''} onClick={() => setQuery(value => ({ ...value, group: null, page: 1 }))}>单品榜</button>
             {(Object.keys(groupNames) as GroupField[]).map(field => <button className={field === group ? 'active' : ''} key={field}

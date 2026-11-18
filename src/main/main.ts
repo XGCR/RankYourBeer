@@ -4,7 +4,7 @@ import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/
 import { existsSync, renameSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { backup as sqliteBackup } from 'node:sqlite'
-import type { Draft, Entry, Preset, View } from '../shared/model.ts'
+import type { Draft, Entry, Preset, TastingDay, View } from '../shared/model.ts'
 import { cleanQuery, makeCsv, makeGroupCsv, queryEntries } from '../shared/query.ts'
 import { CatalogStore, LibraryStore, lcboUrl, mergeEntries, sameBeer, validId, type Photo } from './store.ts'
 
@@ -42,11 +42,21 @@ function getView(input: unknown): View {
   const query = cleanQuery(input)
   const all = getEntries()
   const { rows, sorted, page, pageCount, facets, groups } = catalogueQuery(query, all)
+  const days = new Map<string, TastingDay>()
+  if (query.mode === 'library') {
+    for (const { id, name, record } of all) {
+      if (!record?.tasted || !record.date) continue
+      const day = days.get(record.date) ?? { date: record.date, drinks: [] }
+      day.drinks.push({ id, name })
+      days.set(record.date, day)
+    }
+  }
   return {
     rows, total: sorted.length, page, pageCount, facets, groups, catalog: catalog.info,
     libraryCount: all.filter(entry => entry.record).length,
     tastedCount: all.filter(entry => entry.record?.tasted).length,
     scoredCount: all.filter(entry => entry.record?.score != null).length,
+    tastingDays: query.mode === 'library' ? [...days.values()] : undefined,
   }
 }
 
